@@ -79,6 +79,15 @@ bool DataTable::add_molecule(const std::string& new_molecule, const std::unorder
     return true;
 }
 
+bool DataTable::remove_molecule(const std::string& molecule_name) {
+    if (!m_property_map.contains(molecule_name)) {
+        return false;
+    }
+
+    m_property_map.erase(molecule_name);
+    return true;
+}
+
 bool DataTable::add_property(const std::string& new_property_name, const PropertyType& default_value) {
     if (m_property_cache.contains(new_property_name)) {
         std::cout << "Property already exists in the table\n";
@@ -89,6 +98,18 @@ bool DataTable::add_property(const std::string& new_property_name, const Propert
     // Add the new property to the molecules in the table
     for (auto& molecule : m_property_map) {
         molecule.second[new_property_name] = default_value;
+    }
+    return true;
+}
+
+bool DataTable::remove_property(const std::string &property_name) {
+    if (!m_property_cache.contains(property_name)) {
+        std::cout << "Removed property doesn't exist\n";
+        return false;
+    }
+    m_property_cache.erase(property_name);
+    for (auto& molecule : m_property_map) {
+        molecule.second.erase(property_name);
     }
     return true;
 }

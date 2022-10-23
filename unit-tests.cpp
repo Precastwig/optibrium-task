@@ -79,6 +79,45 @@ int main(int argc, char *argv[]) {
     std::cout << "\033[32mAll add properties tests passed\033[0m\n";
 }
 
+    // Remove/clear tests
+{
+    // Set up table
+    DataTable tb;
+    assert(tb.add_property("Mass", 0.0));
+    assert(tb.add_property("Colour", "Red"));
+
+    assert(tb.add_molecule("Potato", {{"Mass", 3.2}, {"Colour", "Yellow"}}));
+    assert(tb.add_molecule("Cabbage", {{"Mass", 5.2}, {"Colour", "Green"}}));
+
+    // Remove a molecule that doesn't exist
+    assert(!tb.remove_molecule("Something_something"));
+    assert(tb.get_all_molecules().size() == 2);
+
+    // Remove a molecule that does exist
+    assert(tb.remove_molecule("Cabbage"));
+    assert(tb.get_all_molecules().size() == 1);
+
+    // Re add the cabbage
+    assert(tb.add_molecule("Cabbage", {{"Mass", 5.2}, {"Colour", "Green"}}));
+
+    // Remove a property that doesn't exist
+    assert(!tb.remove_property("Giant-ness"));
+    assert(tb.get_all_properties().size() == 2);
+
+    // Remove a property that does exist
+    assert(tb.remove_property("Mass"));
+    assert(tb.get_all_properties().size() == 1);
+
+    // Clear the table
+    tb.clear();
+    assert(tb.get_all_molecules().empty());
+    assert(tb.get_all_properties().empty());
+    
+    std::unordered_map<std::string, PropertyType> map;
+    assert(!tb.get_properties("Potato", map));
+    assert(map.empty());
+}
+
     // Set Union
 {
     DataTable tb1;
@@ -113,10 +152,20 @@ int main(int argc, char *argv[]) {
         "Mass", "Red", "Blue", "Green"
     };
     assert(compare(properties, expected_properties));
+    std::unordered_map<std::string, PropertyType> property_map;
+    assert(result.get_properties("Potato", property_map));
+    std::unordered_map<std::string, PropertyType> expected_map = {
+        {"Red", false},
+        {"Green", true},
+        {"Mass", 0.0},
+        {"Blue", false}
+    };
+    assert(property_map == expected_map);
 
     std::cout << "\033[32mSet union tests passed\033[0m\n";
 }
 
+    // Intersection test
 {
     DataTable tb1;
     DataTable tb2;
