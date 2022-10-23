@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <vector>
 #include <variant>
+#include <map>
 
 // Molecule     Solubility Molecular Weight
 // Paracetamol  4.97       151
@@ -21,25 +22,11 @@
 // You may wish to provide the ability to take set unions, differences and intersections. 
 // You may also wish to think about how to combine tables that have different property columns.
 
-
-struct Property {
-    typedef std::variant<double, int, std::string> Type;
-    enum {
-        DOUBLE,
-        INT,
-        STRING
-    };
-
-    // Basic constructor for ease of creation
-    Property(std::string name, Type value) : m_property_name(name), m_value(value) {};
-
-    // Member variables 
-    std::string m_property_name;
-    Type m_value;
-
-    // Comparison operator
-    // We can implicitly construct using non member function
-    friend bool operator==(const Property& lhs, const Property& rhs);
+typedef std::variant<double, int, std::string> PropertyType;
+enum PropertyTypeEnum{
+    DOUBLE,
+    INT,
+    STRING
 };
 
 class DataTable {
@@ -54,33 +41,34 @@ public:
         if any properties arent provided they will be auto filled with default values
         Returns true if addition was successful, false if not 
     */
-    bool add_molecule(const std::string& new_molecule);
-    bool add_molecule(const std::string& new_molecule, std::vector<Property> new_properties);
+    bool add_molecule(const std::string& new_molecule, const std::unordered_map<std::string, PropertyType>& new_properties);
 
     /*
-        Adds the given property to the molecule,
-        If the provided property already exists on the molecule, the value will be updated
+        Adds the given property to the table, uses whatever value is given as the default value for that property.
+        If the provided property already exists, the value type and default value will be updated
         Returns true if the addition was successful, false if not 
-        (e.g. if the provided property already exists, but with a different type)
     */
-    bool add_property(const std::string& molecule, Property new_property);
+    bool add_property(const std::string& new_property_name, const PropertyType& default_value);
+
+    bool set_property(const std::string& molecule_name, const std::string& property_name, const PropertyType& new_value);
+
+    void clear();
 
     // Data getters
 
-    std::vector<std::string> get_molecules() const;
-    std::vector<Property> get_properties(const std::string& molecule) const;
-    Property::Type get_property_value(const std::string& molecule, const std::string& property) const; 
+    std::vector<std::string> get_all_molecules() const;
+    std::vector<std::string> get_all_properties() const;
+
+    bool get_properties(const std::string& molecule, std::unordered_map<std::string, PropertyType>& properties) const;  
+    bool get_property(const std::string& molecule_name, const std::string& property_name, PropertyType& property) const; 
+    bool get_property_default_value(const std::string& property_name, PropertyType& default_value) const;
 
 private:
-    void update_cache(const std::vector<Property>& properties);
-    bool is_property_valid(const Property& p);
 
-    std::vector<std::string> m_molecules;
-    std::unordered_map<std::string, std::vector<Property>> m_property_map;
+    std::unordered_map<std::string, std::unordered_map<std::string, PropertyType>> m_property_map;
 
-    // A list of all property types in the table, this cache is used to quickly verify any properties of new molecules added to the table (or new properties).
-    // Additionally, it could be used to set a default value for each property, if unspecified (e.g. when merging two tables)
-    std::vector<Property> m_cached_property_types;
+    // A map of all property types and default values in the table
+    std::unordered_map<std::string, PropertyType> m_property_cache;
 };
 
 #endif

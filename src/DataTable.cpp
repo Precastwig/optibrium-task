@@ -1,117 +1,114 @@
 #include "../include/DataTable.hpp"
 #include <iostream>
-
-bool operator==(const Property& lhs, const Property& rhs) {
-    return lhs.m_property_name == rhs.m_property_name &&
-            lhs.m_value == rhs.m_value;
-}
+#include <variant>
 
 DataTable::DataTable() {
 
 }
 
-std::vector<Property> DataTable::get_properties(const std::string& molecule) const {
-    auto it = m_property_map.find(molecule);
-    if (it != m_property_map.end())
-        return it->second;
-    
-    return {};
-}
-
-std::vector<std::string> DataTable::get_molecules() const {
-    return m_molecules;
-}
-
-Property::Type DataTable::get_property_value(const std::string& molecule, const std::string& property) const {
-
-    for (const Property& p : get_properties(molecule)) {
-        if (p.m_property_name == property) {
-            return p.m_value;
-        }
+std::vector<std::string> DataTable::get_all_properties() const {
+    std::vector<std::string> property_strings;
+    for (const auto& prop : m_property_cache) {
+        property_strings.push_back(prop.first);
     }
-
-    // Return not found?
-    return Property::Type();
+    return property_strings;
 }
 
-bool DataTable::add_molecule(const std::string& new_molecule) {
-    // Slightly less time efficient, but readability seems more important here
-    return add_molecule(new_molecule, m_cached_property_types);
+std::vector<std::string> DataTable::get_all_molecules() const {
+    std::vector<std::string> molecule_strings;
+    for (const auto& prop : m_property_map) {
+        molecule_strings.push_back(prop.first);
+    }
+    return molecule_strings;
 }
 
-bool DataTable::add_molecule(const std::string& new_molecule, std::vector<Property> new_properties) {
-    if (std::find(m_molecules.begin(), m_molecules.end(), new_molecule) != m_molecules.end()) {
-        // We dont want to double-add a molecule
+bool DataTable::get_properties(const std::string& molecule, std::unordered_map<std::string, PropertyType>& properties) const {
+    if (!m_property_map.contains(molecule)) {
         return false;
     }
+    properties = m_property_map.at(molecule);
+    return true;
+}  
 
+bool DataTable::get_property(const std::string& molecule_name, const std::string& property_name, PropertyType& property) const {
+    if (!m_property_map.contains(molecule_name) ||
+        !m_property_cache.contains(property_name)) {
+        return false;
+    }
+    property = m_property_map.at(molecule_name).at(property_name);
+    return true;
+}
+
+bool DataTable::get_property_default_value(const std::string& property_name, PropertyType& default_value) const {    
+    if (!m_property_cache.contains(property_name)) {
+        return false;
+    }
+    default_value = m_property_cache.at(property_name);
+    return true;
+}
+
+bool DataTable::add_molecule(const std::string& new_molecule, const std::unordered_map<std::string, PropertyType>& new_properties) {
+    if (m_property_map.find(new_molecule) != m_property_map.end()) {
+        // We dont want to double-add a molecule
+        std::cout << "The molecule already exists in the table\n";
+        return false;
+    }
     // We need to sanity check the properties list
-    for (const Property& p : new_properties) {
-        // Find any invalid properties (according to the cache)
-        if (!is_property_valid(p)) {
+    if (new_properties.size() != m_property_cache.size()) {
+        std::cout << "The property list is the incorrect size\n";
+        return false;
+    }
+    for (const auto& prop : new_properties) {
+        if (!m_property_cache.contains(prop.first)) {
+            std::cout << "The property " << prop.first << " doesn't exist in the table\n";
+            return false;
+        }
+
+        // Check that the type of the incoming properties is correct
+        if (m_property_cache[prop.first].index() != prop.second.index()) {
             // The molecule being added contains a property that already
             // exists in the table, but with a different type
-            std::cout << "The property " << p.m_property_name << " is invalid\n";
+            std::cout << "The property " << prop.first << " is invalid\n";
             return false;
         }
     }
 
     // Insert the molecule
-    m_molecules.push_back(new_molecule);
     m_property_map[new_molecule] = new_properties;
 
-    update_cache(new_properties);
     return true;
 }
 
-bool DataTable::add_property(const std::string& molecule, Property new_property) {
-    if (!is_property_valid(new_property)) {
+bool DataTable::add_property(const std::string& new_property_name, const PropertyType& default_value) {
+    if (m_property_cache.contains(new_property_name)) {
+        std::cout << "Property already exists in the table\n";
         return false;
-    } 
-
-    auto find_it = std::find_if(
-        m_property_map[molecule].begin(), 
-        m_property_map[molecule].end(), 
-        [](const Property& p) {
-            return true;
-        });
-    if (find_it == m_property_map[molecule].end()) {
-        // The property is unique to the table
-        m_property_map[molecule].push_back(new_property);
-        update_cache({new_property});
-    } else {
-        // The property already exists, update its value
-        find_it->m_value = new_property.m_value;
+    }
+    m_property_cache[new_property_name] = default_value;
+    // The property is new to the table
+    // Add the new property to the molecules in the table
+    for (auto& molecule : m_property_map) {
+        molecule.second[new_property_name] = default_value;
     }
     return true;
 }
 
-bool DataTable::is_property_valid(const Property& p) {
-    // Check if the given property has the same name as an existing property, but a different type
-    auto find_it = 
-        std::find_if(
-            m_cached_property_types.begin(), 
-            m_cached_property_types.end(), 
-            [&p](const Property& cached_p ){
-                return p.m_property_name == cached_p.m_property_name &&
-                        p.m_value.index() != cached_p.m_value.index();
-            });
-    return find_it == m_cached_property_types.end();
+bool DataTable::set_property(const std::string& molecule_name, const std::string& property_name, const PropertyType& new_value) {
+    if (!m_property_map.contains(molecule_name) ||
+        !m_property_cache.contains(property_name)) {
+        std::cout << "Molecule or Property doesn't exist in the table\n";
+        return false;
+    }
+    if (m_property_cache[property_name].index() != new_value.index()) {
+        std::cout << "Given property has differing type in table\n";
+        return false;
+    }
+
+    m_property_map[molecule_name][property_name] = new_value;
+    return true;
 }
 
-void DataTable::update_cache(const std::vector<Property>& properties) {
-    // Find any unique properties of this molecule and add it to the cache
-    for (const Property& p : properties) {
-        auto find_it =
-            std::find_if(
-                m_cached_property_types.begin(), 
-                m_cached_property_types.end(), 
-                [&p](const Property& cached_p ){
-                    return p.m_property_name == cached_p.m_property_name;
-                });
-        if (find_it == m_cached_property_types.end()) {
-            // Unique property type
-            m_cached_property_types.push_back(p);
-        }
-    }
+void DataTable::clear() {
+    m_property_map.clear();
+    m_property_cache.clear();
 }
